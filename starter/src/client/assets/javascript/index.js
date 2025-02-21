@@ -122,28 +122,30 @@ async function handleCreateRace() {
 }
 
 function runRace(raceID) {
-	return new Promise((resolve, reject) => {
-		const raceInterval = setInterval(async () => {
-			try {
-				const res = await getRace(raceID);
+    return new Promise((resolve, reject) => {
+        console.log(`Starting race monitoring for race ${raceID}`);
 
-				if (res.status === "in-progress") {
-					// Update the leaderboard
-					renderAt('#leaderBoard', raceProgress(res.positions));
-				} else if (res.status === "finished") {
-					// Stop polling, show final results, and resolve the promise
-					clearInterval(raceInterval);
-					renderAt('#race', resultsView(res.positions));
-					resolve(res);
-				}
-			} catch (error) {
-				console.error("Error fetching race data:", error);
-				clearInterval(raceInterval);
-				reject(error);
-			}
-		}, 500);
-	});
+        const raceInterval = setInterval(async () => {
+            try {
+                const raceData = await getRace(raceID);
+                console.log("Race status:", raceData.status);
+
+                if (raceData.status === "in-progress") {
+                    renderAt("#leaderBoard", raceProgress(raceData.positions));
+                } 
+                else if (raceData.status === "finished") {
+                    clearInterval(raceInterval); // Stop checking
+                    renderAt("#race", resultsView(raceData.positions)); // Show results
+                    resolve(raceData); // Resolve the promise
+                }
+            } catch (error) {
+                clearInterval(raceInterval);
+                reject(`Error fetching race data: ${error.message}`);
+            }
+        }, 500); // Fetch race data every 500ms
+    });
 }
+
 
 
 async function runCountdown() {
@@ -285,30 +287,35 @@ function renderRaceStartView(track) {
 }
 
 function resultsView(positions) {
-	userPlayer.driver_name += " (you)"
-	let count = 1
-  
-	const results = positions.map(p => {
-		return `
-			<tr>
-				<td>
-					<h3>${count++} - ${p.driver_name}</h3>
-				</td>
-			</tr>
-		`
-	})
+    if (!positions || positions.length === 0) {
+        return `<p>No race data available</p>`;
+    }
 
-	return `
-		<header>
-			<h1>Race Results</h1>
-		</header>
-		<main>
-			<h3>Race Results</h3>
-			<p>The race is done! Here are the final results:</p>
-			${results.join('')}
-			<a href="/race">Start a new race</a>
-		</main>
-	`
+    positions.sort((a, b) => a.final_position - b.final_position); // Sort by position
+
+    const playerID = parseInt(store.player_id); // Get the selected player ID
+
+    return `
+        <h2>Race Results</h2>
+        <table>
+            <tr>
+                <th>Position</th>
+                <th>Driver</th>
+            </tr>
+            ${positions
+                .map(pos => {
+                    const isPlayer = pos.id === playerID ? " (You)" : "";
+                    return `
+                        <tr>
+                            <td>${pos.final_position}</td>
+                            <td>${pos.driver_name}${isPlayer}</td>
+                        </tr>
+                    `;
+                })
+                .join("")}
+        </table>
+        <a href="/race">Start New Race</a>
+    `;
 }
 
 function raceProgress(positions) {
